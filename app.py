@@ -1,65 +1,59 @@
 from __future__ import annotations
 
+import json
+import sqlite3
+from pathlib import Path
+
 import streamlit as st
 
 from course_waitlist import CourseOffering, EnrollmentService, ResultCode
 
-st.set_page_config(
-    page_title="CourseFlow | Enrollment Console",
-    page_icon="🎓",
-    layout="wide",
-    initial_sidebar_state="expanded",
-)
-
-st.markdown("""
-<style>
-@import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Space+Grotesk:wght@500;600;700&display=swap');
-html, body, [class*="css"] { font-family: 'DM Sans', sans-serif; }
-.stApp { background: #f5f7fb; }
-h1, h2, h3 { font-family: 'Space Grotesk', sans-serif; color: #12213b; }
-.hero { padding: 1.4rem 1.6rem; border-radius: 20px; color: white;
-        background: linear-gradient(120deg, #13294b 0%, #174b78 58%, #237d91 100%);
-        margin-bottom: 1.3rem; }
-.hero h1 { color: white; margin: 0; font-size: 2.15rem; }
-.hero p { color: #d9e8f6; margin: .45rem 0 0 0; }
-.metric { background: white; border: 1px solid #e4eaf2; border-radius: 16px;
-          padding: 1rem 1.15rem; min-height: 105px; }
-.metric-label { color: #65748b; font-size: .85rem; font-weight: 600; }
-.metric-value { color: #13294b; font-family: 'Space Grotesk', sans-serif;
-                font-size: 2rem; font-weight: 700; margin-top: .15rem; }
-.metric-note { color: #7d8aa0; font-size: .78rem; }
-.panel { background: white; border: 1px solid #e4eaf2; border-radius: 16px;
-         padding: 1.15rem 1.25rem; margin-bottom: 1rem; }
-.small-muted { color: #65748b; font-size: .9rem; }
-div.stButton > button { border-radius: 10px; font-weight: 600; min-height: 2.7rem; }
-[data-testid="stSidebar"] { background: #edf2f8; }
-</style>
-""", unsafe_allow_html=True)
+DB_PATH = Path(__file__).with_name("course_waitlist.db")
+ALL_LEARNERS = ["Ava", "Noah", "Mia", "Liam", "Zoe", "Ethan", "Ivy", "Leo", "Aria", "Kai"]
 
 
-def init_state() -> None:
-    if "capacity" not in st.session_state:
-        st.session_state.capacity = 3
-    if "eligible_ids" not in st.session_state:
-        st.session_state.eligible_ids = {"Ava", "Noah", "Mia", "Liam", "Zoe", "Ethan"}
-    if "enrolled" not in st.session_state:
-        st.session_state.enrolled = []
-    if "waitlist" not in st.session_state:
-        st.session_state.waitlist = []
-    if "events" not in st.session_state:
-        st.session_state.events = [("SYSTEM", "CourseFlow workspace initialized", "Ready")]
-    if "service" not in st.session_state:
-        rebuild_service()
+def init_database() -> None:
+    """Create the small SQLite state table if it does not already exist."""
+    with sqlite3.connect(DB_PATH) as connection:
+        connection.execute(
+            "CREATE TABLE IF NOT EXISTS app_state (id INTEGER PRIMARY KEY CHECK (id = 1), payload TEXT NOT NULL)"
+        )
+        connection.commit()
+
+
+def load_persisted_state() -> dict | None:
+    with sqlite3.connect(DB_PATH) as connection:
+        row = connection.execute("SELECT payload FROM app_state WHERE id = 1").fetchone()
+    return json.loads(row[0]) if row else None
+
+
+def save_persisted_state() -> None:
+    payload = {
+        "capacity": int(st.session_state.capacity),
+        "eligible_ids": sorted(st.session_state.eligible_ids),
+        "enrolled": list(st.session_state.enrolled),
+        "waitlist": list(st.session_state.waitlist),
+        "events": list(st.session_state.events),
+    }
+    with sqlite3.connect(DB_PATH) as connection:
+        connection.execute(
+            "INSERT INTO app_state (id, payload) VALUES (1, ?) "
+            "ON CONFLICT(id) DO UPDATE SET payload = excluded.payload",
+            (json.dumps(payload),),
+        )
+        connection.commit()
 
 
 def rebuild_service() -> None:
     offering = CourseOffering(
-        capacity=st.session_state.get("capacity", 3),
+        capacity=int(st.session_state.get("capacity", 3)),
         enrolled=list(st.session_state.get("enrolled", [])),
         waitlist=list(st.session_state.get("waitlist", [])),
     )
     eligible_ids = set(st.session_state.get("eligible_ids", set()))
-    st.session_state.service = EnrollmentService(offering, eligible=lambda learner: learner in eligible_ids)
+    st.session_state.service = EnrollmentService(
+        offering, eligible=lambda learner: learner in eligible_ids
+    )
 
 
 def sync_state() -> None:
@@ -70,8 +64,56 @@ def sync_state() -> None:
 
 def log_event(actor: str, detail: str, status: str) -> None:
     st.session_state.events.insert(0, (actor, detail, status))
-    st.session_state.events = st.session_state.events[:30]
+    st.session_state.events = st.session_state.events[:50]
 
+
+def init_state() -> None:
+    if st.session_state.get("initialized"):
+        return
+    init_database()
+    saved = load_persisted_state()
+    if saved:
+        st.session_state.capacity = int(saved.get("capacity", 3))
+        st.session_state.eligible_ids = set(saved.get("eligible_ids", ALL_LEARNERS[:6]))
+        st.session_state.enrolled = list(saved.get("enrolled", []))
+        st.session_state.waitlist = list(saved.get("waitlist", []))
+        st.session_state.events = [tuple(item) for item in saved.get("events", [])]
+    else:
+        st.session_state.capacity = 3
+        st.session_state.eligible_ids = set(ALL_LEARNERS[:6])
+        st.session_state.enrolled = []
+        st.session_state.waitlist = []
+        st.session_state.events = [("SYSTEM", "CourseFlow workspace initialized", "Ready")]
+        save_persisted_state()
+    rebuild_service()
+    st.session_state.initialized = True
+
+
+st.set_page_config(
+    page_title="CourseFlow | Enrollment Console",
+    page_icon="🎓",
+    layout="wide",
+    initial_sidebar_state="expanded",
+)
+st.markdown("""
+<style>
+@import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Space+Grotesk:wght@500;600;700&display=swap');
+html, body, [class*="css"] { font-family: 'DM Sans', sans-serif; }
+.stApp { background: #f5f7fb; }
+h1, h2, h3 { font-family: 'Space Grotesk', sans-serif; color: #12213b; }
+.hero { padding: 1.4rem 1.6rem; border-radius: 20px; color: white; background: linear-gradient(120deg, #13294b 0%, #174b78 58%, #237d91 100%); margin-bottom: 1.3rem; }
+.hero h1 { color: white; margin: 0; font-size: 2.15rem; }
+.hero p { color: #d9e8f6; margin: .45rem 0 0 0; }
+.metric { background: white; border: 1px solid #e4eaf2; border-radius: 16px; padding: 1rem 1.15rem; min-height: 105px; }
+.metric-label { color: #65748b; font-size: .85rem; font-weight: 600; }
+.metric-value { color: #13294b; font-family: 'Space Grotesk', sans-serif; font-size: 2rem; font-weight: 700; margin-top: .15rem; }
+.metric-note { color: #7d8aa0; font-size: .78rem; }
+.panel { background: white; border: 1px solid #e4eaf2; border-radius: 16px; padding: 1.15rem 1.25rem; margin-bottom: 1rem; }
+.small-muted { color: #65748b; font-size: .9rem; }
+div.stButton > button { border-radius: 10px; font-weight: 600; min-height: 2.7rem; }
+[data-testid="stSidebar"] { background: #edf2f8; }
+</style>
+""", unsafe_allow_html=True)
 
 init_state()
 
@@ -80,7 +122,10 @@ with st.sidebar:
     st.caption("ENROLLMENT MANAGEMENT")
     st.divider()
     st.markdown("### Offering settings")
-    new_capacity = st.number_input("Seat capacity", min_value=0, max_value=500, value=int(st.session_state.capacity), step=1)
+    new_capacity = st.number_input(
+        "Seat capacity", min_value=0, max_value=500,
+        value=int(st.session_state.capacity), step=1, key="capacity_input"
+    )
     if st.button("Apply capacity", use_container_width=True):
         if new_capacity < len(st.session_state.enrolled):
             st.error("Capacity cannot be lower than current enrollment.")
@@ -88,25 +133,31 @@ with st.sidebar:
             st.session_state.capacity = int(new_capacity)
             rebuild_service()
             log_event("ADMIN", f"Capacity set to {new_capacity}", "Updated")
+            save_persisted_state()
             st.success("Capacity updated.")
+            st.rerun()
+
     st.markdown("### Prerequisites")
-    all_learners = ["Ava", "Noah", "Mia", "Liam", "Zoe", "Ethan", "Ivy", "Leo", "Aria", "Kai"]
     eligible = st.multiselect(
         "Learners who meet prerequisites",
-        all_learners,
-        default=[x for x in all_learners if x in st.session_state.eligible_ids],
+        ALL_LEARNERS,
+        default=[x for x in ALL_LEARNERS if x in st.session_state.eligible_ids],
         help="Enrollment and waitlist promotion are restricted to eligible learners.",
+        key="eligible_input",
     )
     if set(eligible) != st.session_state.eligible_ids:
         st.session_state.eligible_ids = set(eligible)
         rebuild_service()
+        log_event("ADMIN", "Prerequisite eligibility updated", "Updated")
+        save_persisted_state()
     if st.button("Refresh waitlist", use_container_width=True):
         promoted = st.session_state.service.refresh_waitlist()
         sync_state()
         log_event("SYSTEM", f"Waitlist refreshed; promoted {promoted or 'nobody'}", "Updated")
+        save_persisted_state()
         st.rerun()
     st.divider()
-    st.caption("AI-assisted engineering demo · In-memory state")
+    st.caption(f"SQLite database: {DB_PATH.name}")
 
 st.markdown("""
 <div class="hero">
@@ -129,21 +180,30 @@ for col, label, value, note in [
     (m4, "WAITLIST", waitlist_count, "Learners waiting"),
 ]:
     with col:
-        st.markdown(f'<div class="metric"><div class="metric-label">{label}</div><div class="metric-value">{value}</div><div class="metric-note">{note}</div></div>', unsafe_allow_html=True)
+        st.markdown(
+            f'<div class="metric"><div class="metric-label">{label}</div>'
+            f'<div class="metric-value">{value}</div><div class="metric-note">{note}</div></div>',
+            unsafe_allow_html=True,
+        )
 
-st.write("")
-enroll_tab, roster_tab, activity_tab = st.tabs(["＋  Manage enrollment", "▤  Class roster", "◷  Activity log"])
+enroll_tab, roster_tab, activity_tab = st.tabs(
+    ["＋  Manage enrollment", "▤  Class roster", "◷  Activity log"]
+)
 
 with enroll_tab:
     left, right = st.columns([1.05, 0.95], gap="large")
     with left:
         st.markdown("### Enroll a learner")
         st.markdown('<p class="small-muted">Choose a learner and let CourseFlow apply the enrollment rules.</p>', unsafe_allow_html=True)
-        available_learners = [x for x in all_learners if x not in state.enrolled and x not in state.waitlist]
-        selected = st.selectbox("Learner", available_learners, index=None, placeholder="Select a learner…")
-        selected_eligible = selected in st.session_state.eligible_ids if selected else False
+        available_learners = [
+            x for x in ALL_LEARNERS if x not in state.enrolled and x not in state.waitlist
+        ]
+        selected = st.selectbox(
+            "Learner", available_learners, index=None,
+            placeholder="Select a learner…", key="enroll_learner",
+        )
         if selected:
-            if selected_eligible:
+            if selected in st.session_state.eligible_ids:
                 st.success("Prerequisites satisfied")
             else:
                 st.warning("Prerequisites not satisfied")
@@ -151,6 +211,7 @@ with enroll_tab:
             result = service.enroll(selected)
             sync_state()
             log_event(selected, result.message, result.code.value.replace("_", " ").title())
+            save_persisted_state()
             if result.code == ResultCode.ENROLLED:
                 st.success(result.message)
             elif result.code == ResultCode.WAITLISTED:
@@ -160,11 +221,15 @@ with enroll_tab:
             st.rerun()
 
         st.markdown("### Drop an enrollment")
-        drop_candidate = st.selectbox("Currently enrolled learner", state.enrolled, index=None, placeholder="Select an enrolled learner…")
+        drop_candidate = st.selectbox(
+            "Currently enrolled learner", state.enrolled, index=None,
+            placeholder="Select an enrolled learner…", key="drop_learner",
+        )
         if st.button("Drop learner", use_container_width=True, disabled=not drop_candidate):
             result = service.drop(drop_candidate)
             sync_state()
             log_event(drop_candidate, result.message, result.code.value.replace("_", " ").title())
+            save_persisted_state()
             st.success(result.message) if result.code == ResultCode.DROPPED else st.error(result.message)
             st.rerun()
 
@@ -192,7 +257,11 @@ with roster_tab:
         st.markdown("### Confirmed learners")
         if state.enrolled:
             for index, learner in enumerate(state.enrolled, start=1):
-                st.markdown(f'<div class="panel"><b>{index:02d}</b> &nbsp; {learner} <span style="float:right;color:#18866b">● Enrolled</span></div>', unsafe_allow_html=True)
+                st.markdown(
+                    f'<div class="panel"><b>{index:02d}</b> &nbsp; {learner}'
+                    '<span style="float:right;color:#18866b">● Enrolled</span></div>',
+                    unsafe_allow_html=True,
+                )
         else:
             st.info("No learners enrolled yet.")
     with roster_right:
@@ -201,20 +270,26 @@ with roster_tab:
             for index, learner in enumerate(state.waitlist, start=1):
                 eligible_now = learner in st.session_state.eligible_ids
                 label = "Eligible" if eligible_now else "Prerequisite pending"
-                st.markdown(f'<div class="panel"><b>{index:02d}</b> &nbsp; {learner} <span style="float:right;color:{"#18866b" if eligible_now else "#b7791f"}">● {label}</span></div>', unsafe_allow_html=True)
+                color = "#18866b" if eligible_now else "#b7791f"
+                st.markdown(
+                    f'<div class="panel"><b>{index:02d}</b> &nbsp; {learner}'
+                    f'<span style="float:right;color:{color}">● {label}</span></div>',
+                    unsafe_allow_html=True,
+                )
         else:
             st.info("The waitlist is empty.")
 
 with activity_tab:
     st.markdown("### Recent activity")
     if st.session_state.events:
-        st.dataframe(
-            [{"Actor": actor, "Event": detail, "Result": status} for actor, detail, status in st.session_state.events],
-            use_container_width=True,
-            hide_index=True,
-        )
+        for actor, detail, status in st.session_state.events:
+            st.markdown(
+                f'<div class="panel"><b>{actor}</b> &nbsp; {detail}'
+                f'<span style="float:right;color:#65748b">{status}</span></div>',
+                unsafe_allow_html=True,
+            )
     else:
         st.info("No activity recorded.")
 
 st.divider()
-st.caption("CourseFlow is an assessment demo. Data is held in memory for the current Streamlit session and is not persisted.")
+st.caption("CourseFlow uses a local SQLite database (course_waitlist.db) so enrollment and waitlist state survive app restarts.")
