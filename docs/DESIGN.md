@@ -1,7 +1,7 @@
 # Design Specification
 
 ## Service boundary
-`EnrollmentService` owns enrollment, dropping, and waitlist promotion for exactly one `CourseOffering`. The offering stores capacity plus ordered learner-ID lists for enrolled learners and the waitlist. There is no HTTP API or frontend because neither is needed for this bounded service slice.
+`EnrollmentService` owns enrollment, dropping, and waitlist promotion for exactly one `CourseOffering`. The offering stores capacity plus ordered learner-ID lists for enrolled learners and the waitlist. The `app.py` Streamlit dashboard is a thin presentation layer that invokes the service and displays results; business rules remain in the service.
 
 ## Data and results
 - `CourseOffering.capacity`: non-negative integer.
@@ -12,7 +12,7 @@
 Learner IDs are trimmed and must be non-empty strings. The store is process-local and in memory.
 
 ## Eligibility assumption
-An injected `eligible(learner_id)` callback represents the prerequisite rule. The default callback allows all learners for the demo. A false result rejects direct enrollment and does not add the learner to the waitlist. If an accepted waitlisted learner becomes ineligible before promotion, that learner is skipped and retained in the original queue position. Promotion continues to the earliest currently eligible learner. `refresh_waitlist()` can retry promotion after eligibility changes if a seat is available.
+An injected `eligible(learner_id)` callback represents the prerequisite rule. The default callback allows all learners for the service demo. The UI provides a fictional set of learners and allows the presenter to configure which learners satisfy prerequisites. A false result rejects direct enrollment and does not add the learner to the waitlist. If an accepted waitlisted learner becomes ineligible before promotion, that learner is skipped and retained in the original queue position. Promotion continues to the earliest currently eligible learner. `refresh_waitlist()` can retry promotion after eligibility changes if a seat is available.
 
 If the eligibility callback raises an exception, the service fails closed and treats the learner as ineligible for that operation. A production service should distinguish provider failures from a confirmed prerequisite failure.
 
@@ -41,11 +41,14 @@ If the eligibility callback raises an exception, the service fails closed and tr
 ### Explicit waitlist refresh
 `refresh_waitlist()` permits a caller to retry promotion after external prerequisite changes. It promotes at most one learner when a seat is available.
 
+## UI behavior
+The Streamlit dashboard displays offering metrics, lets a presenter change capacity and prerequisite eligibility, processes enroll/drop actions, shows the current roster and FIFO waitlist, and records recent activity. Demo state is session-local and not persisted. The UI is for demonstrating the service, not a production identity or registration system.
+
 ## Concurrency and persistence
-A reentrant lock serializes state transitions inside a single Python process, preventing two simultaneous threads from claiming the same seat or adding duplicate records. The lock does not coordinate multiple processes or hosts. State is lost when the process stops. A persistent implementation would need database transactions, unique constraints, and suitable row/queue locking. A production implementation should test concurrency against its actual persistence mechanism.
+A reentrant lock serializes service state transitions inside a single Python process, preventing two simultaneous threads from claiming the same seat or adding duplicate records. The lock does not coordinate multiple processes or hosts. State is lost when the process stops. A persistent implementation would need database transactions, unique constraints, and suitable row/queue locking. A production implementation should test concurrency against its actual persistence mechanism.
 
 ## Tradeoffs
-- One offering only; no catalog, identity integration, API server, or database.
+- One offering only; no catalog, identity integration, or database.
 - Lists provide understandable FIFO behavior but are not optimized for very large queues.
 - Eligibility is injected rather than implemented as a configurable policy engine.
 - Ineligible waitlisted learners are skipped but retained.
