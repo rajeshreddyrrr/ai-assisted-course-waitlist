@@ -1,21 +1,20 @@
 # AI-Assisted Course Waitlist
 
-A bounded course-offering service demonstrating enrollment, dropping, prerequisite checks, and FIFO waitlist promotion. Built with an AI-assisted engineering workflow for the Charles Schwab AI Engineering Assessment.
+A bounded course-offering service with a polished Streamlit dashboard, enrollment, dropping, prerequisite checks, and FIFO waitlist promotion. Built with an AI-assisted engineering workflow for the Charles Schwab AI Engineering Assessment.
 
-## Scope and policy
+## Features
 
-- One course offering with a fixed capacity.
-- In-memory state; no database or frontend.
-- Each learner can be enrolled or waitlisted only once.
-- Learners must satisfy the prerequisite rule to enroll or join the waitlist.
-- When a seat opens, promote the earliest **currently eligible** learner.
-- Ineligible learners encountered in the waitlist are skipped but retained in their queue position.
-- A lock serializes state changes among threads in this process.
+- Interactive dashboard with capacity, enrollment, open-seat, and waitlist metrics.
+- Learner enrollment and dropping through a graphical interface.
+- Configurable prerequisite eligibility for demo learners.
+- FIFO waitlist promotion, including skipping currently ineligible waitlisted learners.
+- Activity log and class roster.
+- Service-level automated tests for acceptance criteria and concurrency.
 
 ## Requirements
 
 - Python 3.11+
-- `pytest`
+- Dependencies in `requirements.txt`
 
 ## Run locally
 
@@ -26,26 +25,29 @@ python -m venv .venv
 # macOS/Linux:
 source .venv/bin/activate
 python -m pip install -r requirements.txt
+streamlit run app.py
+```
+
+Open the local URL printed by Streamlit. To run the service tests in a separate terminal:
+
+```bash
 python -m pytest -q
 python -m course_waitlist
 ```
 
-The CLI runs a small demonstration. No external services or credentials are required.
-
 ## Project layout
 
-- `course_waitlist/` — service and demonstration CLI.
+- `app.py` — interactive CourseFlow dashboard.
+- `course_waitlist/` — enrollment service and CLI demonstration.
 - `tests/` — acceptance-focused automated tests.
 - `docs/DESIGN.md` — design, invariants, policy, and tradeoffs.
 - `docs/AI_USAGE.md` — prompt/use record and verification checklist.
 - `docs/LIMITATIONS.md` — scoped risks and follow-up items.
 
-## Design summary
+## Demo assumptions and limitations
 
-The service returns structured result objects for expected business outcomes. Learners who fail prerequisites are rejected without changing state. Duplicate requests do not create duplicate records. Dropping a learner who is not enrolled returns a clear result without mutating state.
-
-This is an assessment-sized in-memory implementation, not a production registration platform. Read the design and limitations documents before extending it.
+The dashboard uses a small set of fictional demo learners. Prerequisite eligibility is toggled in the sidebar to demonstrate acceptance and promotion behavior. State is in memory for the current Streamlit session and is not persisted. The service lock protects threads within one process only; this is not a production multi-user registration platform.
 
 ## AI-assisted engineering disclosure
 
-ChatGPT was used as the primary implementation assistant for task decomposition, code drafting, test design, and documentation. The AI-use log records the prompts and decisions used for this implementation. Before submission, run the commands above, inspect the changes, and update verification statuses to reflect tests and review actually performed.
+ChatGPT was used as the primary implementation assistant for task decomposition, code drafting, test design, UI drafting, and documentation. Before submission, run the application and tests locally, inspect the changes, and update `docs/AI_USAGE.md` with actual verification evidence.
