@@ -9,7 +9,7 @@
 - `CourseOffering.waitlist`: FIFO list of waiting learner IDs.
 - `Result`: stable result code, message, requested learner ID, and optional promoted learner ID.
 
-Learner IDs are trimmed and must be non-empty strings. The store is process-local and in memory.
+Learner IDs are trimmed and must be non-empty strings. The core service is process-local and in memory; the Streamlit UI persists its state through a local SQLite database (`course_waitlist.db`).
 
 ## Eligibility assumption
 An injected `eligible(learner_id)` callback represents the prerequisite rule. The default callback allows all learners for the service demo. The UI provides a fictional set of learners and allows the presenter to configure which learners satisfy prerequisites. A false result rejects direct enrollment and does not add the learner to the waitlist. If an accepted waitlisted learner becomes ineligible before promotion, that learner is skipped and retained in the original queue position. Promotion continues to the earliest currently eligible learner. `refresh_waitlist()` can retry promotion after eligibility changes if a seat is available.
@@ -42,10 +42,10 @@ If the eligibility callback raises an exception, the service fails closed and tr
 `refresh_waitlist()` permits a caller to retry promotion after external prerequisite changes. It promotes at most one learner when a seat is available.
 
 ## UI behavior
-The Streamlit dashboard displays offering metrics, lets a presenter change capacity and prerequisite eligibility, processes enroll/drop actions, shows the current roster and FIFO waitlist, and records recent activity. Demo state is session-local and not persisted. The UI is for demonstrating the service, not a production identity or registration system.
+The Streamlit dashboard displays offering metrics, lets a presenter change capacity and prerequisite eligibility, processes enroll/drop actions, shows the current roster and FIFO waitlist, and records recent activity. Demo state is persisted to the local SQLite database (`course_waitlist.db`) and survives app restarts. The UI is for demonstrating the service, not a production identity or registration system.
 
 ## Concurrency and persistence
-A reentrant lock serializes service state transitions inside a single Python process, preventing two simultaneous threads from claiming the same seat or adding duplicate records. The lock does not coordinate multiple processes or hosts. State is lost when the process stops. A persistent implementation would need database transactions, unique constraints, and suitable row/queue locking. A production implementation should test concurrency against its actual persistence mechanism.
+A reentrant lock serializes service state transitions inside a single Python process, preventing two simultaneous threads from claiming the same seat or adding duplicate records. The lock does not coordinate multiple processes or hosts. Core service state is lost when the process stops; the UI reloads saved state from SQLite on startup. A persistent implementation would need database transactions, unique constraints, and suitable row/queue locking. A production implementation should test concurrency against its actual persistence mechanism.
 
 ## Tradeoffs
 - One offering only; no catalog, identity integration, or database.
