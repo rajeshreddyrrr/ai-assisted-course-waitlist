@@ -37,7 +37,7 @@ python -m course_waitlist
 
 ## Project layout
 
-- `app.py` — interactive CourseFlow dashboard.
+- `app.py` — interactive CourseFlow dashboard with SQLite persistence.
 - `course_waitlist/` — enrollment service and CLI demonstration.
 - `tests/` — acceptance-focused automated tests.
 - `docs/DESIGN.md` — design, invariants, policy, and tradeoffs.
@@ -46,7 +46,7 @@ python -m course_waitlist
 
 ## Demo assumptions and limitations
 
-The dashboard uses a small set of fictional demo learners. Prerequisite eligibility is toggled in the sidebar to demonstrate acceptance and promotion behavior. State is in memory for the current Streamlit session and is not persisted. The service lock protects threads within one process only; this is not a production multi-user registration platform.
+The dashboard uses a small set of fictional demo learners. Prerequisite eligibility is toggled in the sidebar to demonstrate acceptance and promotion behavior. The UI persists capacity, eligibility, enrollment, waitlist, and recent activity in a local SQLite file named `course_waitlist.db` in the project root. Keep this file locally; it is created automatically on first launch. The service lock protects threads within one process only; this is not a production multi-user registration platform.
 
 ## AI-assisted engineering disclosure
 
