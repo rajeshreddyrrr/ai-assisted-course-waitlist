@@ -1,10 +1,15 @@
 # Limitations and Follow-up Risks
 
-1. **SQLite persistence scope:** The API saves demo state to a local SQLite file. This is suitable for a local assessment demo, but it is not a production multi-user database deployment; back up the file if its contents matter.
-2. **Single-process locking:** The lock protects threads sharing this service instance, not multiple processes, containers, or hosts. Persistent multi-instance deployments need database transactions and constraints.
-3. **Eligibility provider failure:** Callback exceptions fail closed but are represented as prerequisite failures. A production API should distinguish a provider outage from a confirmed prerequisite failure.
-4. **Prerequisite changes:** Waitlisted learners are rechecked during promotion. The service offers `refresh_waitlist()` for a caller to trigger promotion after eligibility changes.
-5. **Single offering and local IDs:** No catalog, learner identity service, authentication, authorization, audit trail, or multi-offering isolation is implemented.
-6. **Operational API:** The service exposes Python methods and a demonstration CLI only. HTTP endpoints are intentionally out of scope.
-7. **Scale:** List scans and removals are O(n), appropriate for this bounded assessment but not necessarily for very large queues.
-8. **Verification:** The candidate must run the tests and demo locally and record actual evidence before submission.
+## In-scope limitations
+1. **Single offering:** The service models one course offering only; no catalog or multi-term registration is included.
+2. **In-memory core state:** `EnrollmentService` is an in-memory service. State does not persist across process restarts unless a caller supplies a persistence layer.
+3. **Process-local locking:** A reentrant lock protects transitions in one process. It does not coordinate separate processes, containers, or hosts.
+4. **Eligibility callback errors:** Exceptions fail closed and appear as prerequisite failures. A production service should distinguish provider outages from confirmed ineligibility.
+5. **Queue scale:** List scans and removals are O(n), appropriate for a bounded assessment but not necessarily very large queues.
+6. **No identity or access control:** Authentication, authorization, learner identity verification, and a production audit trail are outside scope.
+
+## Optional demonstration extensions
+The repository also contains a CourseFlow dashboard/API and local SQLite persistence added during follow-up work. These demonstrate the service interactively, but the attached assessment explicitly says not to add a frontend or a new database unless the starter requires it. Treat those layers as optional extras rather than evidence required to satisfy the assessed service slice. The core service and its tests should remain independently runnable.
+
+## Verification limitation
+The candidate must run the documented tests and CLI demo locally, inspect the implementation, and record actual command output, date, and Python version in `docs/AI_USAGE.md` before submission. A successful CI run is useful supporting evidence but does not replace local review or the candidate's independent verification.
