@@ -137,7 +137,7 @@ st.markdown("""
 st.markdown("## Course setup")
 st.caption("These controls are intentionally shown on the main page so capacity, learner creation, and prerequisite status are easy to find.")
 
-setup_capacity, setup_add, setup_prereq = st.columns([0.85, 1.0, 1.4], gap="large")
+setup_capacity, setup_prereq = st.columns([0.9, 1.5], gap="large")
 with setup_capacity:
     st.markdown("### 1. Seat capacity")
     new_capacity = st.number_input(
@@ -156,28 +156,8 @@ with setup_capacity:
             st.session_state.flash_message = ("success", "Capacity updated.")
             st.rerun()
 
-with setup_add:
-    st.markdown("### 2. Add a learner")
-    with st.form("add_learner_form_main", clear_on_submit=True):
-        new_learner = st.text_input("Learner name", placeholder="Enter a new learner name")
-        add_learner_clicked = st.form_submit_button("＋ Add learner", use_container_width=True)
-    if add_learner_clicked:
-        learner_name = new_learner.strip()
-        existing_names = {name.casefold() for name in st.session_state.learners}
-        if not learner_name:
-            st.error("Enter a learner name.")
-        elif learner_name.casefold() in existing_names:
-            st.error("That learner already exists.")
-        else:
-            st.session_state.learners.append(learner_name)
-            log_event("ADMIN", f"Added learner {learner_name}", "Created")
-            save_persisted_state()
-            st.success(f"{learner_name} added. Its prerequisite status is not verified yet.")
-            st.rerun()
-    st.caption(f"{len(st.session_state.learners)} learners available")
-
 with setup_prereq:
-    st.markdown("### 3. Prerequisite status")
+    st.markdown("### 2. Prerequisite status")
     st.write("Select only learners whose required prerequisites have been completed.")
     eligible = st.multiselect(
         "Eligible learners",
@@ -198,6 +178,36 @@ with setup_prereq:
         log_event("SYSTEM", f"Waitlist refreshed; promoted {promoted or 'nobody'}", "Updated")
         save_persisted_state()
         st.rerun()
+
+st.markdown("### 3. Add a learner")
+st.write("Add the learner here, then mark their prerequisite status in the section above or during creation.")
+with st.form("add_learner_form_main", clear_on_submit=True):
+    add_col1, add_col2, add_col3 = st.columns([1.3, 1.0, 0.9], gap="medium")
+    with add_col1:
+        new_learner = st.text_input("Learner name", placeholder="Enter a new learner name")
+    with add_col2:
+        learner_eligible = st.checkbox("Prerequisites completed", value=False, help="Check this only if the learner has completed the required prerequisites.")
+    with add_col3:
+        st.markdown("<div style='height: 1.85rem'></div>", unsafe_allow_html=True)
+        add_learner_clicked = st.form_submit_button("＋ Add learner", use_container_width=True)
+if add_learner_clicked:
+    learner_name = new_learner.strip()
+    existing_names = {name.casefold() for name in st.session_state.learners}
+    if not learner_name:
+        st.session_state.flash_message = ("error", "Enter a learner name before adding.")
+    elif learner_name.casefold() in existing_names:
+        st.session_state.flash_message = ("error", "That learner already exists.")
+    else:
+        st.session_state.learners.append(learner_name)
+        if learner_eligible:
+            st.session_state.eligible_ids.add(learner_name)
+        log_event("ADMIN", f"Added learner {learner_name}", "Created")
+        rebuild_service()
+        save_persisted_state()
+        status = "marked eligible" if learner_eligible else "needs prerequisite verification"
+        st.session_state.flash_message = ("success", f"{learner_name} added successfully and {status}.")
+    st.rerun()
+st.caption(f"{len(st.session_state.learners)} learners available. New learners are not eligible unless you confirm their prerequisites.")
 
 st.divider()
 
