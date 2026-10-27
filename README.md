@@ -38,7 +38,7 @@ python -m streamlit run app.py
 
 Open the local URL printed in the terminal, usually `http://localhost:8501`.
 
-The Streamlit interface includes enrollment and drop actions, capacity settings, prerequisite eligibility controls, the enrolled roster, waitlist, and activity log. It stores its demonstration state in the local `course_waitlist.db` SQLite file.
+The Streamlit interface includes an **Add a learner** form in the left sidebar, enrollment and drop actions, capacity settings, prerequisite eligibility controls, the enrolled roster, waitlist, and activity log. New learners are saved in SQLite and are not marked eligible automatically; add them to the prerequisite-eligible list if they meet the course requirements. It stores its demonstration state in the local `course_waitlist.db` SQLite file.
 
 If the browser page does not open automatically, copy the local URL from the terminal into your browser. Keep the terminal running while using the UI.
 
