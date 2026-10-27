@@ -1,0 +1,12 @@
+{
+  "name": "ai-assisted-course-waitlist",
+  "private": true,
+  "version": "1.0.0",
+  "scripts": {
+    "start": "concurrently -k -n API,WEB \"python -m uvicorn api:app --reload --host 127.0.0.1 --port 8000\" \"npm --prefix frontend run dev\"",
+    "test": "python -m pytest -v"
+  },
+  "devDependencies": {
+    "concurrently": "^9.1.2"
+  }
+}
