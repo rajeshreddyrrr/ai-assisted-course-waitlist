@@ -38,7 +38,7 @@ python -m streamlit run app.py
 
 Open the local URL printed in the terminal, usually `http://localhost:8501`.
 
-The Streamlit interface includes an **Add a learner** form in the left sidebar, enrollment and drop actions, capacity settings, prerequisite eligibility controls, the enrolled roster, waitlist, and activity log. New learners are saved in SQLite and are not marked eligible automatically; add them to the prerequisite-eligible list if they meet the course requirements. It stores its demonstration state in the local `course_waitlist.db` SQLite file.
+The Streamlit interface includes learner creation, enrollment and drop actions, capacity settings, prerequisite eligibility controls, the enrolled roster, waitlist, and activity log. New learners are saved in SQLite and are not marked eligible automatically unless you confirm their prerequisites.
 
 If the browser page does not open automatically, copy the local URL from the terminal into your browser. Keep the terminal running while using the UI.
 
@@ -60,7 +60,7 @@ npm install
 npm run dev
 ```
 
-Open `http://localhost:5173`. The Vite development server forwards `/api` requests to the backend at `http://127.0.0.1:8000`. You can inspect the API at `http://127.0.0.1:8000/docs`. Both processes must remain running.
+Open `http://localhost:5173`. Use the **Add learner** button beside **Manage enrollment** to create a learner; you can optionally mark prerequisites as completed in the form. New learners are saved in SQLite and appear in the enrollment dropdown and prerequisite settings. The Vite development server forwards `/api` requests to the backend at `http://127.0.0.1:8000`. You can inspect the API at `http://127.0.0.1:8000/docs`. Both processes must remain running.
 
 ## Run tests
 
