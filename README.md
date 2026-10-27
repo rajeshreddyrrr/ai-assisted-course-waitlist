@@ -6,16 +6,17 @@ A bounded Python implementation of enrollment, dropping, and FIFO waitlist promo
 
 The core deliverable is the framework-independent service in `course_waitlist/service.py`. It implements capacity checks, prerequisite validation, duplicate prevention, dropping, and FIFO promotion. Ineligible waitlisted learners are skipped during promotion but retained in their relative queue position. The tests focus on the assessment's acceptance criteria.
 
-An optional CourseFlow dashboard/API is also present from follow-up development. The attached assessment says not to add a frontend or a new database unless the starter requires them, so the dashboard is not required to demonstrate the assessed service.
+A Streamlit UI and an optional React/FastAPI dashboard are also included as demonstrations. The assessment does not require a frontend or a new database unless the starter requires them.
 
 ## Requirements
 
 - Python 3.11+
 - pip
+- Node.js/npm only if running the optional React dashboard
 
-## Setup and run the tests
+## Setup
 
-Run these commands from the repository root:
+Run from the repository root in PowerShell:
 
 ```powershell
 python --version
@@ -23,29 +24,66 @@ python -m venv .venv
 .\.venv\Scripts\Activate.ps1
 python -m pip install --upgrade pip
 python -m pip install -r requirements.txt
-python -m pytest -v
 ```
 
 If PowerShell blocks virtual-environment activation, run `Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass` in that terminal and activate again, or use the virtual environment's Python executable directly.
 
-## Run the service demonstration
+## Run the web UI (Streamlit)
 
-From the repository root, with the virtual environment active:
+**This is the simplest way to see the enrollment functionality in a browser.** From the repository root:
+
+```powershell
+python -m streamlit run app.py
+```
+
+Open the local URL printed in the terminal, usually `http://localhost:8501`.
+
+The Streamlit interface includes enrollment and drop actions, capacity settings, prerequisite eligibility controls, the enrolled roster, waitlist, and activity log. It stores its demonstration state in the local `course_waitlist.db` SQLite file.
+
+If the browser page does not open automatically, copy the local URL from the terminal into your browser. Keep the terminal running while using the UI.
+
+## Run the optional React/FastAPI dashboard
+
+This is a separate UI from the Streamlit app. Start each process in a separate terminal.
+
+Terminal 1 — API, from the repository root:
+
+```powershell
+python -m uvicorn api:app --reload --host 127.0.0.1 --port 8000
+```
+
+Terminal 2 — React frontend:
+
+```powershell
+cd frontend
+npm install
+npm run dev
+```
+
+Open `http://localhost:5173`. The Vite development server forwards `/api` requests to the backend at `http://127.0.0.1:8000`. You can inspect the API at `http://127.0.0.1:8000/docs`. Both processes must remain running.
+
+## Run tests
+
+From the repository root:
+
+```powershell
+python -m pytest -v
+```
+
+## Run the service demonstration (CLI, not a web UI)
 
 ```powershell
 python -m course_waitlist
 ```
 
-The demonstration creates an in-memory offering, processes a few enrollment requests, drops a learner, and prints the resulting enrolled and waitlist state. It does not require a database.
-
-## Optional dashboard/API
-
-The optional React/FastAPI demonstration is not required by the assessment. If you want to run it, follow the dashboard-specific instructions in the repository history or start the API and frontend as separate processes. Its SQLite file is separate from the core in-memory service.
+This runs a deterministic in-memory demonstration and prints results in the terminal. It does not open a browser.
 
 ## Project layout
 
 - `course_waitlist/service.py` — enrollment, drop, and waitlist-promotion rules.
 - `course_waitlist/__main__.py` — deterministic command-line demonstration.
+- `app.py` — Streamlit web UI.
+- `api.py` and `frontend/` — optional FastAPI/React dashboard.
 - `tests/test_service.py` — focused acceptance and concurrency tests.
 - `tests/test_api.py` — optional API integration tests for the dashboard extension.
 - `docs/DESIGN.md` — service boundary, assumptions, invariants, and tradeoffs.
