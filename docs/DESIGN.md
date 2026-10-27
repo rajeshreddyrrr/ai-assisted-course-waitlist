@@ -1,20 +1,19 @@
 # Design Specification
 
-## Service boundary
-`EnrollmentService` owns enrollment, dropping, and waitlist promotion for exactly one `CourseOffering`. The offering stores capacity plus ordered learner-ID lists for enrolled learners and the waitlist. The React/Vite dashboard calls the FastAPI layer, which invokes the enrollment service and persists state to SQLite. The legacy `app.py` Streamlit dashboard remains available as a fallback; business rules remain in the service.
+## Scope and service boundary
+The assessed feature is a bounded service for one course offering: enrollment, dropping, and FIFO waitlist promotion. `EnrollmentService` owns these rules and remains independent of the UI, HTTP framework, and persistence. It operates on a `CourseOffering` object in memory. The repository also contains an optional CourseFlow demonstration UI/API added during follow-up work; those are convenience layers, not required by the assessment's stated scope. The assessment says not to add a frontend or a new database unless the starter requires them.
 
-## Data and results
+## Data model and results
 - `CourseOffering.capacity`: non-negative integer.
-- `CourseOffering.enrolled`: ordered list of currently enrolled learner IDs.
+- `CourseOffering.enrolled`: ordered list of enrolled learner IDs.
 - `CourseOffering.waitlist`: FIFO list of waiting learner IDs.
-- `Result`: stable result code, message, requested learner ID, and optional promoted learner ID.
+- `Result`: stable result code, human-readable message, requested learner ID, and optional promoted learner ID.
+- Learner IDs are trimmed; blank or non-string values are rejected.
 
-Learner IDs are trimmed and must be non-empty strings. The core service is process-local and in memory; the Streamlit UI persists its state through a local SQLite database (`course_waitlist.db`).
+## Prerequisite and waitlist assumptions
+The service receives an `eligible(learner_id)` callback representing the prerequisite rule. If no callback is supplied, all learners are considered eligible. An ineligible learner is rejected from direct enrollment and is not added to the waitlist. If a learner who was eligible when waitlisted becomes ineligible before promotion, the service skips that learner and retains them in their original relative queue position. It continues scanning for the earliest currently eligible learner. The policy is consistent for promotion during drop and explicit `refresh_waitlist()`.
 
-## Eligibility assumption
-An injected `eligible(learner_id)` callback represents the prerequisite rule. The default callback allows all learners for the service demo. The UI provides a fictional set of learners and allows the presenter to configure which learners satisfy prerequisites. A false result rejects direct enrollment and does not add the learner to the waitlist. If an accepted waitlisted learner becomes ineligible before promotion, that learner is skipped and retained in the original queue position. Promotion continues to the earliest currently eligible learner. `refresh_waitlist()` can retry promotion after eligibility changes if a seat is available.
-
-If the eligibility callback raises an exception, the service fails closed and treats the learner as ineligible for that operation. A production service should distinguish provider failures from a confirmed prerequisite failure.
+If the eligibility callback raises an exception, the service fails closed and treats that learner as ineligible for that operation. A production service should distinguish an eligibility-provider outage from a confirmed prerequisite failure.
 
 ## Invariants
 1. Enrolled count never exceeds capacity.
@@ -22,34 +21,32 @@ If the eligibility callback raises an exception, the service fails closed and tr
 3. A learner cannot be both enrolled and waitlisted.
 4. Enrollment and promotion require eligibility.
 5. Waitlist order is preserved among learners not promoted; the first currently eligible learner is selected.
-6. Invalid requests and unsuccessful drops do not mutate state.
+6. Invalid requests and unsuccessful drops do not mutate enrollment or waitlist state.
+7. A drop promotes at most one learner because it opens one seat.
 
 ## State transitions
 
 ### Enroll
 1. Validate and normalize learner ID.
 2. Return a clear duplicate result if already enrolled or waitlisted.
-3. Check prerequisites; reject if not eligible.
+3. Check prerequisites; reject if ineligible.
 4. Enroll immediately if a seat exists; otherwise append once to the waitlist.
 
 ### Drop
 1. Validate learner ID.
-2. If not enrolled, return `NOT_ENROLLED` without modifying state.
+2. If learner is not enrolled, return `NOT_ENROLLED` without mutating state.
 3. Remove the learner.
-4. If a seat is available, scan the waitlist from the front. Promote the first eligible learner and retain ineligible entries.
+4. Scan the waitlist from the front and promote the first currently eligible learner, retaining skipped ineligible entries.
 
 ### Explicit waitlist refresh
-`refresh_waitlist()` permits a caller to retry promotion after external prerequisite changes. It promotes at most one learner when a seat is available.
-
-## UI behavior
-The React dashboard displays offering metrics, lets a presenter change capacity and prerequisite eligibility, processes enroll/drop actions, shows the current roster and FIFO waitlist, and records recent activity. FastAPI persists demo state in the local SQLite database (`course_waitlist.db`) so it survives app restarts. The UI is for demonstrating the service, not a production identity or registration system.
+`refresh_waitlist()` retries promotion after eligibility changes. It promotes at most one learner when a seat is available. It returns `None` when no eligible learner can be promoted or no seat is available.
 
 ## Concurrency and persistence
-A reentrant lock serializes API state read-modify-write operations inside a single Python process, and the service lock protects transitions. These locks do not coordinate multiple API processes or hosts. SQLite stores the latest state between restarts; a production multi-instance service would need database transactions and stronger concurrency controls. A persistent implementation would need database transactions, unique constraints, and suitable row/queue locking. A production implementation should test concurrency against its actual persistence mechanism.
+The core service uses a reentrant lock to serialize transitions within one process. It stores its state in memory and does not claim persistence across process restarts. The optional demo API layer stores a snapshot in a local SQLite file and uses a process-local lock; this does not coordinate multiple API processes or hosts. Neither approach is a production multi-instance registration architecture. Database transactions, uniqueness constraints, and a persistence-specific concurrency test would be required for a production implementation.
 
-## Tradeoffs
-- One offering only; no catalog, identity integration, or database.
-- Lists provide understandable FIFO behavior but are not optimized for very large queues.
-- Eligibility is injected rather than implemented as a configurable policy engine.
+## Tradeoffs and limitations
+- One offering only; no catalog, identity integration, authentication, or authorization.
+- Lists provide understandable FIFO behavior but scans/removals are O(n).
+- Eligibility is injected as a callback, not implemented as a configurable policy engine.
 - Ineligible waitlisted learners are skipped but retained.
-- Expected business outcomes use result codes; the in-memory implementation has no external infrastructure.
+- Core service tests exercise the business rules independently of the optional demo layers.
