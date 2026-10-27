@@ -32,6 +32,9 @@ function App() {
   const [eligibilityOpen, setEligibilityOpen] = useState(false);
   const [eligibleDraft, setEligibleDraft] = useState([]);
   const [showSettings, setShowSettings] = useState(false);
+  const [showAddLearner, setShowAddLearner] = useState(false);
+  const [newLearnerName, setNewLearnerName] = useState("");
+  const [newLearnerEligible, setNewLearnerEligible] = useState(false);
 
   const reload = async () => {
     const state = await request("/api/state");
@@ -49,6 +52,7 @@ function App() {
   const enrolled = data?.enrolled || [];
   const waitlist = data?.waitlist || [];
   const eligible = data?.eligible_ids || [];
+  const learnerPool = data?.learners || [];
   const capacity = data?.capacity ?? 0;
   const openSeats = Math.max(capacity - enrolled.length, 0);
   const remaining = learnerPool.filter((name) => !enrolled.includes(name) && !waitlist.includes(name));
@@ -117,7 +121,7 @@ function App() {
 
         <section className="content-grid">
           <div className="primary-column">
-            <div className="section-head"><div><h2>{tab === "roster" ? "Confirmed learners" : tab === "waitlist" ? "The waitlist" : tab === "activity" ? "Recent activity" : "Manage enrollment"}</h2><p>{tab === "overview" ? "Your course roster, in real time." : tab === "roster" ? "Learners who have secured their place." : tab === "waitlist" ? "First in, first considered for the next seat." : "A record of changes in this offering."}</p></div>{tab === "overview" && <button className="button button-outline" onClick={() => setTab("roster")}>View roster <ArrowRight size={15}/></button>}</div>
+            <div className="section-head"><div><h2>{tab === "roster" ? "Confirmed learners" : tab === "waitlist" ? "The waitlist" : tab === "activity" ? "Recent activity" : "Manage enrollment"}</h2><p>{tab === "overview" ? "Your course roster, in real time." : tab === "roster" ? "Learners who have secured their place." : tab === "waitlist" ? "First in, first considered for the next seat." : "A record of changes in this offering."}</p></div><div className="section-actions"><button className="button button-dark" onClick={() => setShowAddLearner(true)}><Plus size={15}/> Add learner</button>{tab === "overview" && <button className="button button-outline" onClick={() => setTab("roster")}>View roster <ArrowRight size={15}/></button>}</div></div>
 
             {(tab === "overview" || tab === "roster") && <div className="panel roster-panel">
               <div className="panel-toolbar"><div className="panel-title"><span className="status-pip"/> Enrolled learners <span className="count-pill">{enrolled.length}</span></div><div className="searchbox"><Search size={15}/><input placeholder="Find a learner" value={search} onChange={e => setSearch(e.target.value)}/>{search && <button onClick={() => setSearch("")}><X size={13}/></button>}</div></div>
@@ -148,6 +152,7 @@ function App() {
         <footer className="footer"><span>© 2026 CourseFlow Studio</span><span><span className="footer-live"/> Local database connected</span><span>Built for thoughtful enrollment <span className="footer-heart">✳</span></span></footer>
       </div>
     </main>
+    {showAddLearner && <div className="modal-backdrop" onClick={() => setShowAddLearner(false)}><div className="modal add-learner-modal" onClick={e=>e.stopPropagation()}><button className="modal-close" onClick={() => setShowAddLearner(false)}><X size={18}/></button><div className="eyebrow">LEARNER MANAGEMENT</div><h2>Add a new learner</h2><p>Enter the learner's name and confirm prerequisite status. You can change eligibility later in Offering settings.</p><form onSubmit={async (e) => { e.preventDefault(); const name = newLearnerName.trim(); if (!name) { setToast("Enter a learner name."); return; } setBusy(true); try { const result = await request("/api/learners", { method: "POST", body: JSON.stringify({ learner_name: name, eligible: newLearnerEligible }) }); await reload(); setToast(result.message); setShowAddLearner(false); setNewLearnerName(""); setNewLearnerEligible(false); } catch (error) { setToast(error.message); } finally { setBusy(false); } }}><label className="field-label" htmlFor="new-learner-name">LEARNER NAME</label><input id="new-learner-name" className="add-learner-input" autoFocus maxLength={100} value={newLearnerName} onChange={e=>setNewLearnerName(e.target.value)} placeholder="e.g. Jordan Lee"/><label className="add-learner-eligible"><input type="checkbox" checked={newLearnerEligible} onChange={e=>setNewLearnerEligible(e.target.checked)}/><span><b>Prerequisites completed</b><small>Only check this if the learner has met the course requirements.</small></span></label><div className="modal-actions"><button type="button" className="button button-outline" onClick={() => setShowAddLearner(false)}>Cancel</button><button type="submit" className="button button-dark" disabled={busy}>{busy ? "Adding…" : "Add learner"} <ArrowRight size={15}/></button></div></form></div></div>}
     {eligibilityOpen && <div className="modal-backdrop" onClick={() => setEligibilityOpen(false)}><div className="modal" onClick={e=>e.stopPropagation()}><button className="modal-close" onClick={()=>setEligibilityOpen(false)}><X size={18}/></button><div className="eyebrow">OFFERING RULES</div><h2>Prerequisite eligibility</h2><p>Choose which learners have met the course prerequisites. Ineligible learners cannot enroll or be promoted from the queue.</p><div className="eligible-options">{learnerPool.map(name=><label key={name} className="eligible-option"><input type="checkbox" checked={eligibleDraft.includes(name)} onChange={e=>setEligibleDraft(old=>e.target.checked?[...old,name]:old.filter(n=>n!==name))}/><span className={"learner-avatar small "+colors[learnerPool.indexOf(name)%colors.length]}>{initials(name)}</span><b>{name}</b><span className="option-check"><Check size={13}/></span></label>)}</div><div className="modal-actions"><button className="button button-outline" onClick={()=>setEligibilityOpen(false)}>Cancel</button><button className="button button-dark" disabled={busy} onClick={applyEligibility}>Save eligibility <ArrowRight size={15}/></button></div></div></div>}
     {toast && <div className={toast.toLowerCase().includes("error") || toast.toLowerCase().includes("cannot") || toast.toLowerCase().includes("not") ? "toast toast-error" : "toast"}><span className="toast-check"><Check size={15}/></span>{toast}<button onClick={()=>setToast("")}><X size={14}/></button></div>}
   </div>;
