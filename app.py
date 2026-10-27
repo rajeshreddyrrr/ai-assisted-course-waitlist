@@ -123,13 +123,29 @@ init_state()
 with st.sidebar:
     st.markdown("## 🎓 CourseFlow")
     st.caption("ENROLLMENT MANAGEMENT")
+    st.info("Use the **Course setup** section on the main page to change capacity, add learners, and verify prerequisites.")
     st.divider()
-    st.markdown("### Offering settings")
+    st.caption(f"SQLite database: {DB_PATH.name}")
+
+st.markdown("""
+<div class="hero">
+  <h1>Course Enrollment Console</h1>
+  <p>A clear view of seat availability, learner enrollment, prerequisites, and fair FIFO waitlist promotion.</p>
+</div>
+""", unsafe_allow_html=True)
+
+st.markdown("## Course setup")
+st.caption("These controls are intentionally shown on the main page so capacity, learner creation, and prerequisite status are easy to find.")
+
+setup_capacity, setup_add, setup_prereq = st.columns([0.85, 1.0, 1.4], gap="large")
+with setup_capacity:
+    st.markdown("### 1. Seat capacity")
     new_capacity = st.number_input(
-        "Seat capacity", min_value=0, max_value=500,
-        value=int(st.session_state.capacity), step=1, key="capacity_input"
+        "Maximum enrolled learners", min_value=0, max_value=500,
+        value=int(st.session_state.capacity), step=1, key="capacity_main_input"
     )
-    if st.button("Apply capacity", use_container_width=True):
+    st.caption(f"Currently enrolled: {len(st.session_state.enrolled)} / {st.session_state.capacity}")
+    if st.button("Save capacity", use_container_width=True):
         if new_capacity < len(st.session_state.enrolled):
             st.error("Capacity cannot be lower than current enrollment.")
         else:
@@ -140,10 +156,11 @@ with st.sidebar:
             st.success("Capacity updated.")
             st.rerun()
 
-    st.markdown("### Add a learner")
-    with st.form("add_learner_form", clear_on_submit=True):
+with setup_add:
+    st.markdown("### 2. Add a learner")
+    with st.form("add_learner_form_main", clear_on_submit=True):
         new_learner = st.text_input("Learner name", placeholder="Enter a new learner name")
-        add_learner_clicked = st.form_submit_button("Add learner", use_container_width=True)
+        add_learner_clicked = st.form_submit_button("＋ Add learner", use_container_width=True)
     if add_learner_clicked:
         learner_name = new_learner.strip()
         existing_names = {name.casefold() for name in st.session_state.learners}
@@ -155,37 +172,34 @@ with st.sidebar:
             st.session_state.learners.append(learner_name)
             log_event("ADMIN", f"Added learner {learner_name}", "Created")
             save_persisted_state()
-            st.success(f"{learner_name} added. Review prerequisites below before enrollment.")
+            st.success(f"{learner_name} added. Its prerequisite status is not verified yet.")
             st.rerun()
+    st.caption(f"{len(st.session_state.learners)} learners available")
 
-    st.markdown("### Prerequisites")
+with setup_prereq:
+    st.markdown("### 3. Prerequisite status")
+    st.write("Select only learners whose required prerequisites have been completed.")
     eligible = st.multiselect(
-        "Learners who meet prerequisites",
-        st.session_state.learners,
+        "Eligible learners",
+        options=st.session_state.learners,
         default=[x for x in st.session_state.learners if x in st.session_state.eligible_ids],
-        help="Enrollment and waitlist promotion are restricted to eligible learners.",
-        key="eligible_input",
+        help="Only selected learners can enroll or join the waitlist. A full course waitlists eligible learners automatically.",
+        key="eligible_main_input",
     )
     if set(eligible) != st.session_state.eligible_ids:
         st.session_state.eligible_ids = set(eligible)
         rebuild_service()
         log_event("ADMIN", "Prerequisite eligibility updated", "Updated")
         save_persisted_state()
+    st.caption(f"{len(st.session_state.eligible_ids)} of {len(st.session_state.learners)} learners marked eligible")
     if st.button("Refresh waitlist", use_container_width=True):
         promoted = st.session_state.service.refresh_waitlist()
         sync_state()
         log_event("SYSTEM", f"Waitlist refreshed; promoted {promoted or 'nobody'}", "Updated")
         save_persisted_state()
         st.rerun()
-    st.divider()
-    st.caption(f"SQLite database: {DB_PATH.name}")
 
-st.markdown("""
-<div class="hero">
-  <h1>Course Enrollment Console</h1>
-  <p>A clear view of seat availability, learner enrollment, prerequisites, and fair FIFO waitlist promotion.</p>
-</div>
-""", unsafe_allow_html=True)
+st.divider()
 
 service = st.session_state.service
 state = service.offering
