@@ -12,7 +12,7 @@ A Streamlit UI and an optional React/FastAPI dashboard are also included as demo
 
 - Python 3.11+
 - pip
-- Node.js/npm for the combined React/FastAPI commands below
+- Node.js/npm for the React/FastAPI dashboard
 
 ## Setup
 
@@ -32,9 +32,9 @@ npm install --prefix frontend
 
 If PowerShell blocks virtual-environment activation, run `Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass` in that terminal and activate again, or use the virtual environment's Python executable directly.
 
-## Start the React frontend and Python backend together
+## Start the React frontend and Python backend together — Way 1
 
-From the repository root, with the Python virtual environment activated, run:
+From the repository root, with the Python virtual environment activated and dependencies installed, run:
 
 ```powershell
 npm start
@@ -42,7 +42,28 @@ npm start
 
 This starts both the FastAPI backend at `http://127.0.0.1:8000` and the React/Vite frontend at `http://localhost:5173` in one terminal. Keep the terminal running while using the app. Press `Ctrl+C` to stop both processes. API docs are available at `http://127.0.0.1:8000/docs`.
 
-If you change dependencies, rerun `npm install` at the root and/or `npm install --prefix frontend` as appropriate.
+The first time you use this way, make sure you have run `npm install` from the repository root so the `concurrently` dependency is installed.
+
+## Start the React frontend and Python backend separately — Way 2
+
+Use this option if you prefer not to use the root `npm start` command. It keeps the original two-terminal workflow and does not require the root `concurrently` package.
+
+**Terminal 1 — Python API:** From the repository root, activate the virtual environment and start FastAPI:
+
+```powershell
+.\.venv\Scripts\Activate.ps1
+python -m uvicorn api:app --reload --host 127.0.0.1 --port 8000
+```
+
+**Terminal 2 — React frontend:** Open a second terminal, go to the frontend folder, and start Vite:
+
+```powershell
+cd C:\Users\sknet\source\ai-assisted-course-waitlist\frontend
+npm install
+npm run dev
+```
+
+If your repository is in a different folder, replace the example path with your actual project path. Open `http://localhost:5173`. The Vite development server forwards `/api` requests to the backend at `http://127.0.0.1:8000`. Keep both terminals running while using the app. API docs are at `http://127.0.0.1:8000/docs`.
 
 ## Run the automated tests
 
@@ -54,7 +75,7 @@ npm test
 
 This runs `python -m pytest -v` and prints each test's status (PASSED/FAILED) plus the final summary. The command exits with a non-zero status if any test fails.
 
-You can also run the Python test command directly:
+Alternatively, run the tests directly with Python:
 
 ```powershell
 python -m pytest -v
