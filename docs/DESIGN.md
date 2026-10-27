@@ -1,7 +1,7 @@
 # Design Specification
 
 ## Service boundary
-`EnrollmentService` owns enrollment, dropping, and waitlist promotion for exactly one `CourseOffering`. The offering stores capacity plus ordered learner-ID lists for enrolled learners and the waitlist. The `app.py` Streamlit dashboard is a thin presentation layer that invokes the service and displays results; business rules remain in the service.
+`EnrollmentService` owns enrollment, dropping, and waitlist promotion for exactly one `CourseOffering`. The offering stores capacity plus ordered learner-ID lists for enrolled learners and the waitlist. The React/Vite dashboard calls the FastAPI layer, which invokes the enrollment service and persists state to SQLite. The legacy `app.py` Streamlit dashboard remains available as a fallback; business rules remain in the service.
 
 ## Data and results
 - `CourseOffering.capacity`: non-negative integer.
@@ -42,10 +42,10 @@ If the eligibility callback raises an exception, the service fails closed and tr
 `refresh_waitlist()` permits a caller to retry promotion after external prerequisite changes. It promotes at most one learner when a seat is available.
 
 ## UI behavior
-The Streamlit dashboard displays offering metrics, lets a presenter change capacity and prerequisite eligibility, processes enroll/drop actions, shows the current roster and FIFO waitlist, and records recent activity. Demo state is persisted to the local SQLite database (`course_waitlist.db`) and survives app restarts. The UI is for demonstrating the service, not a production identity or registration system.
+The React dashboard displays offering metrics, lets a presenter change capacity and prerequisite eligibility, processes enroll/drop actions, shows the current roster and FIFO waitlist, and records recent activity. FastAPI persists demo state in the local SQLite database (`course_waitlist.db`) so it survives app restarts. The UI is for demonstrating the service, not a production identity or registration system.
 
 ## Concurrency and persistence
-A reentrant lock serializes service state transitions inside a single Python process, preventing two simultaneous threads from claiming the same seat or adding duplicate records. The lock does not coordinate multiple processes or hosts. Core service state is lost when the process stops; the UI reloads saved state from SQLite on startup. A persistent implementation would need database transactions, unique constraints, and suitable row/queue locking. A production implementation should test concurrency against its actual persistence mechanism.
+A reentrant lock serializes API state read-modify-write operations inside a single Python process, and the service lock protects transitions. These locks do not coordinate multiple API processes or hosts. SQLite stores the latest state between restarts; a production multi-instance service would need database transactions and stronger concurrency controls. A persistent implementation would need database transactions, unique constraints, and suitable row/queue locking. A production implementation should test concurrency against its actual persistence mechanism.
 
 ## Tradeoffs
 - One offering only; no catalog, identity integration, or database.
