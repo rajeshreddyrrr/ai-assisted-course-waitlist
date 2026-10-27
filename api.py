@@ -15,7 +15,7 @@ from course_waitlist import CourseOffering, EnrollmentService, ResultCode
 
 ROOT = Path(__file__).resolve().parent
 DB_PATH = ROOT / "course_waitlist.db"
-DEFAULT_LEARNERS = ["Ava", "Noah", "Mia", "Liam", "Zoe", "Ethan"]
+DEFAULT_LEARNERS = ["Ava", "Noah", "Mia", "Liam", "Zoe", "Ethan", "Ivy", "Leo", "Aria", "Kai"]
 LOCK = RLock()
 app = FastAPI(title="CourseFlow API", version="1.0.0")
 app.add_middleware(
@@ -29,6 +29,11 @@ app.add_middleware(
 
 class EnrollRequest(BaseModel):
     learner_id: str = Field(min_length=1, max_length=100)
+
+
+class AddLearnerRequest(BaseModel):
+    learner_name: str = Field(min_length=1, max_length=100)
+    eligible: bool = False
 
 
 class CapacityRequest(BaseModel):
@@ -53,15 +58,19 @@ def load_state() -> dict[str, Any]:
         row = connection.execute("SELECT payload FROM app_state WHERE id = 1").fetchone()
         if row:
             saved = json.loads(row[0])
+            learners = list(dict.fromkeys(saved.get("learners", DEFAULT_LEARNERS)))
+            eligible_ids = sorted(set(saved.get("eligible_ids", DEFAULT_LEARNERS)) & set(learners))
             return {
                 "capacity": int(saved.get("capacity", 3)),
-                "eligible_ids": sorted(set(saved.get("eligible_ids", DEFAULT_LEARNERS))),
+                "learners": learners,
+                "eligible_ids": eligible_ids,
                 "enrolled": list(saved.get("enrolled", [])),
                 "waitlist": list(saved.get("waitlist", [])),
                 "events": [list(event) for event in saved.get("events", [])],
             }
         initial = {
             "capacity": 3,
+            "learners": DEFAULT_LEARNERS,
             "eligible_ids": DEFAULT_LEARNERS,
             "enrolled": [],
             "waitlist": [],
@@ -126,6 +135,34 @@ def get_state() -> dict[str, Any]:
         # Validate persisted invariants before sending state to the UI.
         build_service(state)
         return state
+
+
+@app.post("/api/learners")
+def add_learner(body: AddLearnerRequest) -> dict[str, Any]:
+    learner_name = body.learner_name.strip()
+    if not learner_name:
+        raise HTTPException(status_code=422, detail="Enter a learner name.")
+
+    with LOCK:
+        state = load_state()
+        if any(name.casefold() == learner_name.casefold() for name in state["learners"]):
+            raise HTTPException(status_code=409, detail="That learner already exists.")
+
+        state["learners"].append(learner_name)
+        if body.eligible:
+            state["eligible_ids"] = list(dict.fromkeys([*state["eligible_ids"], learner_name]))
+        record(
+            state,
+            "ADMIN",
+            f"Added learner {learner_name}",
+            "Created — eligible" if body.eligible else "Created — prerequisite verification needed",
+        )
+        save_state(state)
+        return {
+            "message": f"{learner_name} added successfully"
+            + (" and marked eligible." if body.eligible else ". Mark prerequisite status before enrollment."),
+            "state": state,
+        }
 
 
 @app.post("/api/enroll")
