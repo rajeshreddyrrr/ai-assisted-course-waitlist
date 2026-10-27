@@ -1,6 +1,6 @@
 # Limitations and Follow-up Risks
 
-1. **SQLite persistence scope:** The UI saves demo state to a local SQLite file. This is suitable for a local assessment demo, but it is not a production multi-user database deployment; back up the file if its contents matter.
+1. **SQLite persistence scope:** The API saves demo state to a local SQLite file. This is suitable for a local assessment demo, but it is not a production multi-user database deployment; back up the file if its contents matter.
 2. **Single-process locking:** The lock protects threads sharing this service instance, not multiple processes, containers, or hosts. Persistent multi-instance deployments need database transactions and constraints.
 3. **Eligibility provider failure:** Callback exceptions fail closed but are represented as prerequisite failures. A production API should distinguish a provider outage from a confirmed prerequisite failure.
 4. **Prerequisite changes:** Waitlisted learners are rechecked during promotion. The service offers `refresh_waitlist()` for a caller to trigger promotion after eligibility changes.
