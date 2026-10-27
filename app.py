@@ -9,7 +9,7 @@ import streamlit as st
 from course_waitlist import CourseOffering, EnrollmentService, ResultCode
 
 DB_PATH = Path(__file__).with_name("course_waitlist.db")
-ALL_LEARNERS = ["Ava", "Noah", "Mia", "Liam", "Zoe", "Ethan", "Ivy", "Leo", "Aria", "Kai"]
+DEFAULT_LEARNERS = ["Ava", "Noah", "Mia", "Liam", "Zoe", "Ethan", "Ivy", "Leo", "Aria", "Kai"]
 
 
 def init_database() -> None:
@@ -30,6 +30,7 @@ def load_persisted_state() -> dict | None:
 def save_persisted_state() -> None:
     payload = {
         "capacity": int(st.session_state.capacity),
+        "learners": list(st.session_state.learners),
         "eligible_ids": sorted(st.session_state.eligible_ids),
         "enrolled": list(st.session_state.enrolled),
         "waitlist": list(st.session_state.waitlist),
@@ -74,13 +75,15 @@ def init_state() -> None:
     saved = load_persisted_state()
     if saved:
         st.session_state.capacity = int(saved.get("capacity", 3))
-        st.session_state.eligible_ids = set(saved.get("eligible_ids", ALL_LEARNERS[:6]))
+        st.session_state.learners = list(dict.fromkeys(saved.get("learners", DEFAULT_LEARNERS)))
+        st.session_state.eligible_ids = set(saved.get("eligible_ids", DEFAULT_LEARNERS[:6]))
         st.session_state.enrolled = list(saved.get("enrolled", []))
         st.session_state.waitlist = list(saved.get("waitlist", []))
         st.session_state.events = [tuple(item) for item in saved.get("events", [])]
     else:
         st.session_state.capacity = 3
-        st.session_state.eligible_ids = set(ALL_LEARNERS[:6])
+        st.session_state.learners = list(DEFAULT_LEARNERS)
+        st.session_state.eligible_ids = set(DEFAULT_LEARNERS[:6])
         st.session_state.enrolled = []
         st.session_state.waitlist = []
         st.session_state.events = [("SYSTEM", "CourseFlow workspace initialized", "Ready")]
@@ -137,11 +140,29 @@ with st.sidebar:
             st.success("Capacity updated.")
             st.rerun()
 
+    st.markdown("### Add a learner")
+    with st.form("add_learner_form", clear_on_submit=True):
+        new_learner = st.text_input("Learner name", placeholder="Enter a new learner name")
+        add_learner_clicked = st.form_submit_button("Add learner", use_container_width=True)
+    if add_learner_clicked:
+        learner_name = new_learner.strip()
+        existing_names = {name.casefold() for name in st.session_state.learners}
+        if not learner_name:
+            st.error("Enter a learner name.")
+        elif learner_name.casefold() in existing_names:
+            st.error("That learner already exists.")
+        else:
+            st.session_state.learners.append(learner_name)
+            log_event("ADMIN", f"Added learner {learner_name}", "Created")
+            save_persisted_state()
+            st.success(f"{learner_name} added. Review prerequisites below before enrollment.")
+            st.rerun()
+
     st.markdown("### Prerequisites")
     eligible = st.multiselect(
         "Learners who meet prerequisites",
-        ALL_LEARNERS,
-        default=[x for x in ALL_LEARNERS if x in st.session_state.eligible_ids],
+        st.session_state.learners,
+        default=[x for x in st.session_state.learners if x in st.session_state.eligible_ids],
         help="Enrollment and waitlist promotion are restricted to eligible learners.",
         key="eligible_input",
     )
@@ -196,7 +217,7 @@ with enroll_tab:
         st.markdown("### Enroll a learner")
         st.markdown('<p class="small-muted">Choose a learner and let CourseFlow apply the enrollment rules.</p>', unsafe_allow_html=True)
         available_learners = [
-            x for x in ALL_LEARNERS if x not in state.enrolled and x not in state.waitlist
+            x for x in st.session_state.learners if x not in state.enrolled and x not in state.waitlist
         ]
         selected = st.selectbox(
             "Learner", available_learners, index=None,
