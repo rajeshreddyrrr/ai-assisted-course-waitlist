@@ -103,6 +103,17 @@ def service_state(state: dict[str, Any], service: EnrollmentService) -> None:
     state["waitlist"] = offering.waitlist
 
 
+def promote_until_full(service: EnrollmentService) -> list[str]:
+    """Promote eligible waitlisted learners until capacity is full or no match remains."""
+    promoted: list[str] = []
+    while len(service.offering.enrolled) < service.offering.capacity:
+        learner_id = service.refresh_waitlist()
+        if learner_id is None:
+            break
+        promoted.append(learner_id)
+    return promoted
+
+
 @app.get("/api/health")
 def health() -> dict[str, str]:
     return {"status": "ok", "database": DB_PATH.name}
@@ -148,13 +159,13 @@ def set_capacity(body: CapacityRequest) -> dict[str, Any]:
         if body.capacity < len(state["enrolled"]):
             raise HTTPException(status_code=409, detail="Capacity cannot be lower than current enrollment.")
         state["capacity"] = body.capacity
-        # If seats are opened, promote the earliest currently eligible waitlisted learner.
+        # Fill every newly available seat, preserving FIFO among eligible learners.
         service = build_service(state)
-        promoted = service.refresh_waitlist()
+        promoted_learners = promote_until_full(service)
         service_state(state, service)
         message = f"Capacity set to {body.capacity}."
-        if promoted:
-            message += f" Promoted {promoted} from the waitlist."
+        if promoted_learners:
+            message += f" Promoted {', '.join(promoted_learners)} from the waitlist."
         record(state, "ADMIN", message, "Updated")
         save_state(state)
         return {"message": message, "state": state}
@@ -176,9 +187,9 @@ def refresh_waitlist() -> dict[str, Any]:
     with LOCK:
         state = load_state()
         service = build_service(state)
-        promoted = service.refresh_waitlist()
+        promoted = promote_until_full(service)
         service_state(state, service)
-        message = f"Promoted {promoted} from the waitlist." if promoted else "Waitlist refreshed; no eligible learner could be promoted."
+        message = f"Promoted {', '.join(promoted)} from the waitlist." if promoted else "Waitlist refreshed; no eligible learner could be promoted."
         record(state, "SYSTEM", message, "Updated")
         save_state(state)
         return {"message": message, "state": state}
