@@ -118,3 +118,34 @@ def test_waitlist_eligibility_lookup_error_fails_closed():
     assert service.enroll("a").code == ResultCode.PREREQUISITE_NOT_MET
     assert service.offering.enrolled == []
     assert service.offering.waitlist == []
+
+def test_invalid_learner_ids_are_rejected_without_mutation():
+    service = EnrollmentService(CourseOffering(capacity=1))
+    for learner_id in ("", "   ", None, 123):
+        result = service.enroll(learner_id)
+        assert result.code == ResultCode.INVALID_LEARNER
+        assert service.offering.enrolled == []
+        assert service.offering.waitlist == []
+
+
+def test_refresh_waitlist_skips_and_retains_ineligible_learner():
+    eligible = {"a": True, "b": True, "c": True}
+    service = EnrollmentService(
+        CourseOffering(capacity=1),
+        eligible=lambda learner: eligible.get(learner, False),
+    )
+    assert service.enroll("a").code == ResultCode.ENROLLED
+    assert service.enroll("b").code == ResultCode.WAITLISTED
+    assert service.enroll("c").code == ResultCode.WAITLISTED
+
+    eligible["b"] = False
+    assert service.drop("a").promoted_learner_id == "c"
+    assert service.offering.enrolled == ["c"]
+    assert service.offering.waitlist == ["b"]
+
+    # If eligibility is restored while no seat is open, refresh must not over-enroll.
+    eligible["b"] = True
+    assert service.refresh_waitlist() is None
+    assert service.offering.enrolled == ["c"]
+    assert service.offering.waitlist == ["b"]
+
