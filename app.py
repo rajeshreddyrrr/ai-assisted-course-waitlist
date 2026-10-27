@@ -156,30 +156,8 @@ with setup_capacity:
             st.session_state.flash_message = ("success", "Capacity updated.")
             st.rerun()
 
-with setup_prereq:
-    st.markdown("### 2. Prerequisite status")
-    st.write("Select only learners whose required prerequisites have been completed.")
-    eligible = st.multiselect(
-        "Eligible learners",
-        options=st.session_state.learners,
-        default=[x for x in st.session_state.learners if x in st.session_state.eligible_ids],
-        help="Only selected learners can enroll or join the waitlist. A full course waitlists eligible learners automatically.",
-        key="eligible_main_input",
-    )
-    if set(eligible) != st.session_state.eligible_ids:
-        st.session_state.eligible_ids = set(eligible)
-        rebuild_service()
-        log_event("ADMIN", "Prerequisite eligibility updated", "Updated")
-        save_persisted_state()
-    st.caption(f"{len(st.session_state.eligible_ids)} of {len(st.session_state.learners)} learners marked eligible")
-    if st.button("Refresh waitlist", use_container_width=True):
-        promoted = st.session_state.service.refresh_waitlist()
-        sync_state()
-        log_event("SYSTEM", f"Waitlist refreshed; promoted {promoted or 'nobody'}", "Updated")
-        save_persisted_state()
-        st.rerun()
 
-st.markdown("### 3. Add a learner")
+st.markdown("### 2. Add a learner")
 st.write("Add the learner here, then mark their prerequisite status in the section above or during creation.")
 with st.form("add_learner_form_main", clear_on_submit=True):
     add_col1, add_col2, add_col3 = st.columns([1.3, 1.0, 0.9], gap="medium")
@@ -208,6 +186,29 @@ if add_learner_clicked:
         st.session_state.flash_message = ("success", f"{learner_name} added successfully and {status}.")
     st.rerun()
 st.caption(f"{len(st.session_state.learners)} learners available. New learners are not eligible unless you confirm their prerequisites.")
+
+with setup_prereq:
+    st.markdown("### 3. Prerequisite status")
+    st.write("Select only learners whose required prerequisites have been completed.")
+    eligible = st.multiselect(
+        "Eligible learners",
+        options=st.session_state.learners,
+        default=[x for x in st.session_state.learners if x in st.session_state.eligible_ids],
+        help="Only selected learners can enroll or join the waitlist. A full course waitlists eligible learners automatically.",
+        key="eligible_main_input",
+    )
+    if set(eligible) != st.session_state.eligible_ids:
+        st.session_state.eligible_ids = set(eligible)
+        rebuild_service()
+        log_event("ADMIN", "Prerequisite eligibility updated", "Updated")
+        save_persisted_state()
+    st.caption(f"{len(st.session_state.eligible_ids)} of {len(st.session_state.learners)} learners marked eligible")
+    if st.button("Refresh waitlist", use_container_width=True):
+        promoted = st.session_state.service.refresh_waitlist()
+        sync_state()
+        log_event("SYSTEM", f"Waitlist refreshed; promoted {promoted or 'nobody'}", "Updated")
+        save_persisted_state()
+        st.rerun()
 
 st.divider()
 
