@@ -128,7 +128,7 @@ def test_invalid_learner_ids_are_rejected_without_mutation():
         assert service.offering.waitlist == []
 
 
-def test_refresh_waitlist_skips_and_retains_ineligible_learner():
+def test_refresh_waitlist_does_not_over_enroll_when_capacity_is_full():
     eligible = {"a": True, "b": True, "c": True}
     service = EnrollmentService(
         CourseOffering(capacity=1),
