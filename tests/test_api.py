@@ -66,3 +66,33 @@ def test_api_rejects_capacity_below_current_enrollment(tmp_path, monkeypatch):
     client.post("/api/enroll", json={"learner_id": "Ava"})
     response = client.post("/api/capacity", json={"capacity": 0})
     assert response.status_code == 409
+
+
+
+def test_api_add_learner_persists_and_sets_optional_eligibility(tmp_path, monkeypatch):
+    monkeypatch.setattr(api, "DB_PATH", tmp_path / "test-courseflow.db")
+    client = TestClient(api.app)
+
+    response = client.post(
+        "/api/learners",
+        json={"learner_name": "Jordan Lee", "eligible": True},
+    )
+    assert response.status_code == 200
+    state = response.json()["state"]
+    assert "Jordan Lee" in state["learners"]
+    assert "Jordan Lee" in state["eligible_ids"]
+    assert "Jordan Lee added successfully" in response.json()["message"]
+
+    persisted = client.get("/api/state").json()
+    assert "Jordan Lee" in persisted["learners"]
+    assert "Jordan Lee" in persisted["eligible_ids"]
+
+
+def test_api_add_learner_rejects_duplicate_name_case_insensitively(tmp_path, monkeypatch):
+    monkeypatch.setattr(api, "DB_PATH", tmp_path / "test-courseflow.db")
+    client = TestClient(api.app)
+
+    assert client.post("/api/learners", json={"learner_name": "Jordan Lee"}).status_code == 200
+    duplicate = client.post("/api/learners", json={"learner_name": "  jOrDaN lEe  "})
+    assert duplicate.status_code == 409
+    assert duplicate.json()["detail"] == "That learner already exists."
