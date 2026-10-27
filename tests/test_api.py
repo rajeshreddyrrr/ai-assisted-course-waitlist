@@ -88,11 +88,20 @@ def test_api_add_learner_persists_and_sets_optional_eligibility(tmp_path, monkey
     assert "Jordan Lee" in persisted["eligible_ids"]
 
 
+
 def test_api_add_learner_rejects_duplicate_name_case_insensitively(tmp_path, monkeypatch):
     monkeypatch.setattr(api, "DB_PATH", tmp_path / "test-courseflow.db")
     client = TestClient(api.app)
 
-    assert client.post("/api/learners", json={"learner_name": "Jordan Lee"}).status_code == 200
-    duplicate = client.post("/api/learners", json={"learner_name": "  jOrDaN lEe  "})
+    assert client.post(
+        "/api/learners",
+        json={"learner_name": "Test Learner Duplicate"},
+    ).status_code == 200
+
+    duplicate = client.post(
+        "/api/learners",
+        json={"learner_name": "  tEsT lEaRnEr DuPlIcAtE  "},
+    )
     assert duplicate.status_code == 409
     assert duplicate.json()["detail"] == "That learner already exists."
+
