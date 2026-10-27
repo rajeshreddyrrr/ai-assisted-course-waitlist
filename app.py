@@ -153,7 +153,7 @@ with setup_capacity:
             rebuild_service()
             log_event("ADMIN", f"Capacity set to {new_capacity}", "Updated")
             save_persisted_state()
-            st.success("Capacity updated.")
+            st.session_state.flash_message = ("success", "Capacity updated.")
             st.rerun()
 
 with setup_add:
@@ -200,6 +200,16 @@ with setup_prereq:
         st.rerun()
 
 st.divider()
+
+flash = st.session_state.pop("flash_message", None)
+if flash:
+    level, message = flash
+    if level == "success":
+        st.success(message)
+    elif level == "info":
+        st.info(message)
+    else:
+        st.error(message)
 
 service = st.session_state.service
 state = service.offering
@@ -248,11 +258,11 @@ with enroll_tab:
             log_event(selected, result.message, result.code.value.replace("_", " ").title())
             save_persisted_state()
             if result.code == ResultCode.ENROLLED:
-                st.success(result.message)
+                st.session_state.flash_message = ("success", result.message)
             elif result.code == ResultCode.WAITLISTED:
-                st.info(result.message)
+                st.session_state.flash_message = ("info", result.message)
             else:
-                st.error(result.message)
+                st.session_state.flash_message = ("error", result.message)
             st.rerun()
 
         st.markdown("### Drop an enrollment")
@@ -265,7 +275,10 @@ with enroll_tab:
             sync_state()
             log_event(drop_candidate, result.message, result.code.value.replace("_", " ").title())
             save_persisted_state()
-            st.success(result.message) if result.code == ResultCode.DROPPED else st.error(result.message)
+            st.session_state.flash_message = (
+                "success" if result.code == ResultCode.DROPPED else "error",
+                result.message,
+            )
             st.rerun()
 
     with right:
