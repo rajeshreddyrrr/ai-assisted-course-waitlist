@@ -194,7 +194,7 @@ with setup_prereq:
         "Eligible learners",
         options=st.session_state.learners,
         default=[x for x in st.session_state.learners if x in st.session_state.eligible_ids],
-        help="Only selected learners can enroll or join the waitlist. A full course waitlists eligible learners automatically.",
+        help="Eligible learners can take an open seat. When the course is full, any learner can join the waitlist; eligibility is checked again before promotion.",
         key="eligible_main_input",
     )
     if set(eligible) != st.session_state.eligible_ids:
@@ -262,7 +262,7 @@ with enroll_tab:
             if selected in st.session_state.eligible_ids:
                 st.success("Prerequisites satisfied")
             else:
-                st.warning("Prerequisites not satisfied")
+                st.warning("Not eligible for an open seat. If the course is full, this learner can still join the waitlist.")
         if st.button("Process enrollment", type="primary", use_container_width=True, disabled=not selected):
             result = service.enroll(selected)
             sync_state()
