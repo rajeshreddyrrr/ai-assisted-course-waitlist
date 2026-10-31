@@ -55,6 +55,25 @@ def test_ineligible_learner_is_skipped_and_retained_when_promotion_scans():
     assert service.offering.waitlist == ["b"]
 
 
+def test_ineligible_learner_can_join_full_waitlist_but_is_skipped_on_promotion():
+    eligible = {"enrolled": True, "next_eligible": True}
+    service = EnrollmentService(
+        CourseOffering(capacity=1),
+        eligible=lambda learner: eligible.get(learner, False),
+    )
+    assert service.enroll("enrolled").code == ResultCode.ENROLLED
+
+    # Ineligible learners may queue while the course is full.
+    assert service.enroll("ineligible_first").code == ResultCode.WAITLISTED
+    assert service.enroll("next_eligible").code == ResultCode.WAITLISTED
+    assert service.offering.waitlist == ["ineligible_first", "next_eligible"]
+
+    result = service.drop("enrolled")
+    assert result.promoted_learner_id == "next_eligible"
+    assert service.offering.enrolled == ["next_eligible"]
+    assert service.offering.waitlist == ["ineligible_first"]
+
+
 def test_prerequisite_failure_does_not_mutate_state():
     service = EnrollmentService(CourseOffering(capacity=1), eligible=lambda learner: learner == "eligible")
     result = service.enroll("ineligible")
