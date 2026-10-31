@@ -81,13 +81,16 @@ class EnrollmentService:
                 return Result(ResultCode.ALREADY_ENROLLED, "Learner is already enrolled.", learner_id)
             if learner_id in state.waitlist:
                 return Result(ResultCode.ALREADY_WAITLISTED, "Learner is already on the waitlist.", learner_id)
+            # Eligibility is required to occupy a seat, not to join the queue.
+            # When the course is full, retain the learner in FIFO order and
+            # re-check eligibility when a seat becomes available.
+            if len(state.enrolled) >= state.capacity:
+                state.waitlist.append(learner_id)
+                return Result(ResultCode.WAITLISTED, "Course is full; learner added to waitlist.", learner_id)
             if not self._is_eligible(learner_id):
                 return Result(ResultCode.PREREQUISITE_NOT_MET, "Learner does not meet prerequisites.", learner_id)
-            if len(state.enrolled) < state.capacity:
-                state.enrolled.append(learner_id)
-                return Result(ResultCode.ENROLLED, "Enrollment successful.", learner_id)
-            state.waitlist.append(learner_id)
-            return Result(ResultCode.WAITLISTED, "Course is full; learner added to waitlist.", learner_id)
+            state.enrolled.append(learner_id)
+            return Result(ResultCode.ENROLLED, "Enrollment successful.", learner_id)
 
     def drop(self, learner_id: str) -> Result:
         learner_id = self._normalize_learner_id(learner_id)
