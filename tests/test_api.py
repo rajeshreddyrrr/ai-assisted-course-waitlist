@@ -106,27 +106,29 @@ def test_api_add_learner_rejects_duplicate_name_case_insensitively(tmp_path, mon
     assert duplicate.json()["detail"] == "That learner already exists."
 
 
-def test_api_drop_skips_ineligible_waitlisted_learner_and_promotes_next_eligible(tmp_path, monkeypatch):
+def test_api_allows_ineligible_waitlist_and_drop_promotes_next_eligible(tmp_path, monkeypatch):
     monkeypatch.setattr(api, "DB_PATH", tmp_path / "test-courseflow.db")
     client = TestClient(api.app)
 
     client.post("/api/capacity", json={"capacity": 1})
-    client.post("/api/eligibility", json={"eligible_ids": ["Ava", "Noah", "Mia"]})
-
-    assert client.post("/api/enroll", json={"learner_id": "Ava"}).json()["code"] == "enrolled"
-    assert client.post("/api/enroll", json={"learner_id": "Noah"}).json()["code"] == "waitlisted"
-    assert client.post("/api/enroll", json={"learner_id": "Mia"}).json()["code"] == "waitlisted"
-
-    # Noah becomes ineligible after joining the waitlist.
+    # Noah is ineligible from the beginning; Ava and Mia are eligible.
     client.post("/api/eligibility", json={"eligible_ids": ["Ava", "Mia"]})
 
+    assert client.post("/api/enroll", json={"learner_id": "Ava"}).json()["code"] == "enrolled"
+    ineligible = client.post("/api/enroll", json={"learner_id": "Noah"}).json()
+    assert ineligible["code"] == "waitlisted"
+    assert ineligible["state"]["waitlist"] == ["Noah"]
+
+    eligible = client.post("/api/enroll", json={"learner_id": "Mia"}).json()
+    assert eligible["code"] == "waitlisted"
+    assert eligible["state"]["waitlist"] == ["Noah", "Mia"]
+
+    # When Ava drops, Noah is skipped and retained; Mia takes the vacant seat.
     dropped = client.post("/api/drop", json={"learner_id": "Ava"}).json()
     assert dropped["code"] == "dropped"
     assert dropped["state"]["enrolled"] == ["Mia"]
     assert dropped["state"]["waitlist"] == ["Noah"]
 
-    # The skipped learner remains waitlisted after the API persists the state.
     saved = client.get("/api/state").json()
     assert saved["enrolled"] == ["Mia"]
     assert saved["waitlist"] == ["Noah"]
-
